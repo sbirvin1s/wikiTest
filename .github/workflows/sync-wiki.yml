@@ -10,8 +10,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  actions: read
 
 jobs:
   sync-wiki:
@@ -24,70 +22,88 @@ jobs:
           fetch-depth: 0
 
       - name: Clone or initialize wiki repository
+        env:
+          WIKI_TOKEN: ${{ secrets.WIKI_TOKEN }}
         run: |
-          # Try to clone the existing wiki
-          if git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki 2>/dev/null; then
-            echo "Wiki repository cloned successfully"
-          else
-            echo "Wiki repository doesn't exist, initializing new wiki"
-            mkdir wiki
-            cd wiki
-            git init
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
+            # Check if WIKI_TOKEN is available
+                      if [ -z "$WIKI_TOKEN" ]; then
+              echo "ERROR: WIKI_TOKEN secret is not set!"
+                        echo "Please create a Personal Access Token and add it as a repository secret named 'WIKI_TOKEN'"
+                        echo "Instructions:"
+                    echo "1. Go to GitHub Settings ? Developer settings ? Personal access tokens ? Tokens (classic)"
+               echo "2. Create new token with 'repo' scope"
+                        echo "3. Add it as repository secret: Settings ? Secrets and variables ? Actions ? New repository secret"
+                        echo "4. Name: WIKI_TOKEN, Value: your_token_here"
+                        exit 1
+                      fi
+        
+               # Try to clone the existing wiki
+                      if git clone https://x-access-token:$WIKI_TOKEN@github.com/${{ github.repository }}.wiki.git wiki 2>/dev/null; then
+                     echo "Wiki repository cloned successfully"
+                else
+                 echo "Wiki repository doesn't exist, initializing new wiki"
+                        mkdir wiki
+              cd wiki
+                 git init
+                 git config user.name "github-actions[bot]"
+                        git config user.email "github-actions[bot]@users.noreply.github.com"
    
-            # Create initial Home page
-            echo "# Welcome to the Wiki" > Home.md
-            echo "" >> Home.md
-            echo "This wiki is automatically synchronized with the repository's markdown files." >> Home.md
-            
-            git add .
-            git commit -m "Initialize wiki"
-            git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git
-            
-            # Push to create the wiki repository
-            git push -u origin main 2>/dev/null || git push -u origin master 2>/dev/null || echo "Failed to create wiki - please create a wiki page manually first"
-            cd ..
-          fi
+                # Create initial Home page
+                        echo "# Welcome to the Wiki" > Home.md
+             echo "" >> Home.md
+                        echo "This wiki is automatically synchronized with the repository's markdown files." >> Home.md
+      
+                      git add .
+                  git commit -m "Initialize wiki"
+                     git remote add origin https://x-access-token:$WIKI_TOKEN@github.com/${{ github.repository }}.wiki.git
+        
+                  # Push to create the wiki repository
+             git push -u origin main 2>/dev/null || git push -u origin master 2>/dev/null || echo "Failed to create wiki - please create a wiki page manually first"
+                        cd ..
+                      fi
 
       - name: Sync markdown files to wiki
         run: |
-          # Copy all markdown files maintaining their structure
-          find . -name "*.md" -not -path "./wiki/*" -not -path "./.git/*" | while read file; do
+            # Copy all markdown files maintaining their structure
+                    find . -name "*.md" -not -path "./wiki/*" -not -path "./.git/*" | while read file; do
             # Get relative path from repo root
             rel_path="${file#./}"
          
             # Create a wiki-friendly filename by replacing slashes with dashes
-            wiki_name=$(echo "$rel_path" | sed 's/\//-/g' | sed 's/\.md$//')
+                wiki_name=$(echo "$rel_path" | sed 's/\//-/g' | sed 's/\.md$//')
     
-          # Special handling for README files
-          if [[ "$rel_path" == "README.md" ]]; then
-            wiki_name="Home"
-          elif [[ $(basename "$file") == "README.md" ]]; then
+                # Special handling for README files
+            if [[ "$rel_path" == "README.md" ]]; then
+                        wiki_name="Home"
+            elif [[ $(basename "$file") == "README.md" ]]; then
             # For nested READMEs, use the directory name
-            dir_name=$(dirname "$rel_path")
-            wiki_name=$(echo "$dir_name" | sed 's/\//-/g')
-          fi
-          
-          # Copy the file to the wiki
-          cp "$file" "wiki/${wiki_name}.md"
-          echo "Synced: $rel_path -> ${wiki_name}.md"
-          done
+                dir_name=$(dirname "$rel_path")
+                    wiki_name=$(echo "$dir_name" | sed 's/\//-/g')
+             fi
+  
+                    # Copy the file to the wiki
+                    cp "$file" "wiki/${wiki_name}.md"
+            echo "Synced: $rel_path -> ${wiki_name}.md"
+                done
 
       - name: Commit and push to wiki
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WIKI_TOKEN: ${{ secrets.WIKI_TOKEN }}
         run: |
           cd wiki
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name "github-actions[bot]"
+               git config user.email "github-actions[bot]@users.noreply.github.com"
+   
+                  # Set the remote URL with the PAT token
+          git remote set-url origin https://x-access-token:$WIKI_TOKEN@github.com/${{ github.repository }}.wiki.git
+          
           git add .
  
           # Check if there are changes to commit
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Sync wiki from main repo - $(date +'%Y-%m-%d %H:%M:%S')"
+          git commit -m "Sync wiki from main repo - $(date +'%Y-%m-%d %H:%M:%S')"
             git push origin HEAD
             echo "Wiki updated successfully"
           fi
