@@ -1,6 +1,6 @@
 # Business Logic Overview
 
-## Core Business Rulesssssssssssssssssssss
+## Core Business Rules
 
 This document outlines the key business rules and logic implemented in the WikiTest application.
 
