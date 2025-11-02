@@ -18,9 +18,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Clone wiki repository
+      - name: Clone or initialize wiki repository
         run: |
-          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki
+          # Try to clone the existing wiki
+          if git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki 2>/dev/null; then
+            echo "Wiki repository cloned successfully"
+          else
+            echo "Wiki repository doesn't exist, initializing new wiki"
+            mkdir wiki
+            cd wiki
+            git init
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+   
+            # Create initial Home page
+            echo "# Welcome to the Wiki" > Home.md
+            echo "" >> Home.md
+            echo "This wiki is automatically synchronized with the repository's markdown files." >> Home.md
+            
+            git add .
+            git commit -m "Initialize wiki"
+            git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git
+            
+            # Push to create the wiki repository
+            git push -u origin main 2>/dev/null || git push -u origin master 2>/dev/null || echo "Failed to create wiki - please create a wiki page manually first"
+            cd ..
+          fi
 
       - name: Sync markdown files to wiki
         run: |
@@ -52,7 +75,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          
+ 
           # Check if there are changes to commit
           if git diff --staged --quiet; then
             echo "No changes to commit"
